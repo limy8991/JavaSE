@@ -1,12 +1,10 @@
 package socket;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /**
  * 聊天室服务器
@@ -17,10 +15,11 @@ public class Sever {
      * ServerSocket是运行在服务端上的。其主要有两个作用
      * 1:向服务端申请服务端口(客户端Socket就是通过这个端口与服务端建立连接的)
      * 2:监听服务端口，一旦客户端连接会立即常见一个Socket，通过该Socket与客户端交互
-     *
+     * <p>
      * 如果我们将Socket比喻为"电话"，那么ServerSocket相当于"总机"
      */
     private ServerSocket serverSocket;
+    private PrintWriter[] allOut = {};
 
     public Sever() {
         try {
@@ -59,8 +58,6 @@ public class Sever {
                 thread.start();
 
 
-
-
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -82,18 +79,45 @@ public class Sever {
             this.socket = socket;
             host = socket.getInetAddress().getHostAddress();
         }
+
         public void run() {
             try {
+                //通过socket获取输入流读取对方发送过来的消息
                 InputStream in = socket.getInputStream();
                 InputStreamReader isr = new InputStreamReader(in, StandardCharsets.UTF_8);
                 BufferedReader br = new BufferedReader(isr);
+
+                //通过socket获取输出流用于给对方发送消息
+                OutputStream out = socket.getOutputStream();
+                OutputStreamWriter osw
+                        = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+                BufferedWriter bw = new BufferedWriter(osw);
+                PrintWriter pw = new PrintWriter(bw,true);
+
+                //将该输出流存入共享数组allOut中
+                //1扩容allOut
+                allOut = Arrays.copyOf(allOut,allOut.length+1);
+                //2将pw放到数组最后一个格子里
+                allOut[allOut.length-1] = pw;
+
                 String line;
-                while ((line = br.readLine() )!= null) {
-                    System.out.println(host+"发送:" + line);
+                /*
+                    这里的BufferedReader读取时低下连接的流是通过Socket获取的输入流，
+                    当远端计算机还处于连接状态，但是暂时没有发送内容时，readLine方法会
+                    处于阻塞状态，直到对方发送过来一行字符串为止。
+                    如果返回值为null，则表示对方断开了连接(对方调用了socket.close())。
+                 */
+                while ((line = br.readLine()) != null) {
+                    System.out.println(host+"说:" + line);
+                    //遍历allOut数组，将消息发送给所有客户端
+                    for(int i=0;i<allOut.length;i++) {
+                        allOut[i].println(host + "说:" + line);
+                    }
                 }
-            } catch (IOException e) {
-               // e.printStackTrace();
-            } finally {
+            }catch(IOException e){
+//                e.printStackTrace();
+            }finally {
+
             }
         }
     }
